@@ -1,0 +1,97 @@
+
+1. 单表索引优化  
+
+create table book
+(
+   id int PRIMARY key,
+	 version int,
+	 person int
+)
+
+insert into book (id, version, person)
+VALUES
+   (1,2,3),
+	 (2,3,4),
+	 (3,4,5)
+	 
+
+explain select id,version, person from book where version>1 order by person limit 1
+
+-- 此时 查询version 以及person两个列的时候, 通过explain 可以看到是use filesort 而且还是type 是all， 所以
+-- 当前效率是非常低的，我们需要加索引
+
+create index  idx_v_p on  book(version, person);
+
+-- 创建一个复合索引, 此时我们可以看到explain使用到了 idx_v_p这个索引，但是extra中有了use filesort,效率还是挺慢
+
+drop index idx_v_p on book;
+
+create index idx_v on book (person)
+
+-- 此时我们只建一个person的单独索引，这个时候，我们可以看到当前既有了索引，而且已经没有了use filesort，效率是很高的
+
+
+
+2. 两表索引优化：
+
+     如果查询设计到了两个表的话， 需要使用左连接在右表建立索引，右连接在左边中建立索引
+
+
+    
+
+
+如果是复合索引的话， 比如说
+create table staff(
+  id int PRIMARY key,
+	name VARCHAR(20),
+	age int, 
+	pos VARCHAR(20),
+	add_time date
+)
+
+insert into staff(id, name, age, pos)
+values 
+		(1, 'july',23,'dev'),
+		(2, 'yang',23,'dev')
+		
+		
+		
+create index  idx_name_age_pos on staff(name, age, pos)
+
+explain select * from staff where name='july' and age=23 and pos ='dev';
+-- 此时是可以用到idx_name_age_pos这个索引
+
+explain select * from staff where name='july' and pos ='dev';
+-- 可以到我们跳过了中间的age列，这个时候我们也能用到当前的idx_name_age_pos这个索引
+
+explain select * from staff where name='july' and age=23 ;
+-- 可以用到当前的索引,当时没有了age这个列，这个索引只用到了name那个列
+
+
+explain select * from staff where  age=23 and pos ='dev' 
+-- 我们跳过了name这个列，可以发现当前没有使用到索引
+
+
+复合索引，我们要遵循最左原则: 
+1 带头大哥不能死，中间兄弟不能断
+
+2 不能在索引中做任何计算
+
+3 不能使用索引中范围条件右边的列
+
+4 select中尽量使用 索引的列
+
+5 不使用!= < > ，这个会导致全表扫描
+
+6. is not ,is not null也无法使用索引
+
+7  like %写到右边的时候，可以使用索引，type是range. 效果是最好的
+  
+   如果必须%aa% 两边都要有%的话，我们尽量使用覆盖索引，
+   覆盖索引就是已经在索引中的列(其中包括主键的索引，主键会自动创建索引)。
+   
+   如果select中有任意一个不在索引中的列，索引都会失效
+
+8 字符串不加单引号，会导致索引失效，这里会导致自动类型转换，会导致索引失效 
+   
+  
